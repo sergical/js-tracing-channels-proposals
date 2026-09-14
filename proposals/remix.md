@@ -1,6 +1,7 @@
 # Remix: `TracingChannel` Proposal
 
-> **Status:** Draft
+> **Issue:** TBD
+> **Status:** 📝 Proposal drafted
 > **Target package:** `remix` (v3: `remix/fetch-router`, `remix/ui/server`, `remix/assets`)
 
 ---
@@ -224,25 +225,25 @@ Frame resolution sub-requests go through `router.fetch()`, which dispatches thro
 const shouldTrace = (ch: { hasSubscribers?: boolean }) => ch.hasSubscribers !== false
 ```
 
-On Node 24+ (Remix 3's minimum), `hasSubscribers` works correctly. The helper is a safety net for future runtime support.
+`hasSubscribers` is `undefined` on Node 18, where the aggregated getter is missing, so every proposal in this series compares against `false` rather than testing truthiness. Remix 3 requires Node 24, where the getter works, but keeping the same helper shape means the code reads identically to the other implementations and stays correct if Remix ever widens its runtime support.
 
 ---
 
 ## Backward Compatibility
 
-Zero-cost when no subscribers are registered. `hasSubscribers` is checked before constructing context objects or wrapping with `tracePromise`.
+Zero-cost when no subscribers are registered. `shouldTrace(channel)` is checked before constructing context objects or wrapping with `tracePromise`, on all three channels.
+
+These are server-only modules on an ESM-only package that already requires Node 24, where `node:diagnostics_channel` and `TracingChannel` are both stable. So the acquisition is a plain static import, with none of the `getBuiltinModule`/`require` guarding that cross-runtime or Node 18 libraries need:
 
 ```ts
-let requestChannel;
-try {
-  const dc = ('getBuiltinModule' in process)
-    ? process.getBuiltinModule('node:diagnostics_channel')
-    : require('node:diagnostics_channel');
-  requestChannel = dc.tracingChannel('remix:request');
-} catch {
-  // TracingChannel not available, no-op
-}
+import dc from 'node:diagnostics_channel';
+
+const requestChannel = dc.tracingChannel('remix:request');
+const renderChannel = dc.tracingChannel('remix:render');
+const assetChannel = dc.tracingChannel('remix:asset');
 ```
+
+If Remix later targets a runtime without `diagnostics_channel`, the guarded pattern used by cross-runtime proposals (`getBuiltinModule` then `require`, wrapped in `try`/`catch`) drops in without changing any emission site.
 
 ---
 
@@ -262,24 +263,38 @@ try {
 
 ## Prior Art
 
+This approach follows the same pattern already adopted or in progress by other libraries:
+
 **Frameworks:**
-- **`undici`** (Node.js core): ships `TracingChannel` since Node 20.12 ([`undici:request`](https://nodejs.org/api/diagnostics_channel.html#undici-channels))
-- **`fastify`**: ships natively (`tracing:fastify.request.handler`)
-- **`h3`**: [h3js/h3#1251](https://github.com/h3js/h3/pull/1251) ✅ merged
-- **`srvx`**: [h3js/srvx#141](https://github.com/h3js/srvx/pull/141) ✅ merged
+- **`undici`** (Node.js core): ships `TracingChannel` support since Node 20.12 ([`undici:request`](https://nodejs.org/api/diagnostics_channel.html#undici-channels))
+- **`fastify`**: ships `TracingChannel` support natively (`tracing:fastify.request.handler`)
+- **`h3`**: [h3js/h3#1251](https://github.com/h3js/h3/pull/1251) (`h3.request`, traces middleware and route handlers with a `type` field) ✅ merged
+- **`srvx`**: [h3js/srvx#141](https://github.com/h3js/srvx/pull/141) (`srvx.request`, `srvx.middleware`) ✅ merged
 - **`nitro`**: [nitrojs/nitro#4001](https://github.com/nitrojs/nitro/pull/4001) ✅ merged
-- **`express`**: [pillarjs/router#196](https://github.com/pillarjs/router/pull/196) PR open
-- **`hono`**: [honojs/hono#4842](https://github.com/honojs/hono/issues/4842) issue opened
-- **`elysia`**: [elysiajs/elysia#1809](https://github.com/elysiajs/elysia/issues/1809) in discussion
+- **`nuxt`**: [nuxt/nuxt#35191](https://github.com/nuxt/nuxt/pull/35191) (`nuxt.render`, `nuxt.island`, `nuxt.data`, `nuxt.plugin`) ✅ merged & released (v4.5.0)
+- **`express`**: [pillarjs/router#196](https://github.com/pillarjs/router/pull/196) (`express:request`, traces middleware, handlers, and error handlers with a `type` field), PR open
+- **`hono`**: [honojs/hono#4842](https://github.com/honojs/hono/issues/4842), issue opened
+- **`elysia`**: [elysiajs/elysia#1809](https://github.com/elysiajs/elysia/issues/1809), in discussion
+- **`@tanstack/start`**: [TanStack/router#7604](https://github.com/TanStack/router/discussions/7604), discussion open
 - **`koa`**: proposal drafted
 
 **Databases:**
-- **`mysql2`**: ✅ merged, **`node-redis`**: ✅ merged, **`ioredis`**: ✅ merged
-- **`pg`**: PR open, **`knex`**: PR open
-- **`mongodb`**, **`mongoose`**, **`tedious`**, **`@prisma/client`**: issues opened
+- **`mysql2`**: [sidorares/node-mysql2#4178](https://github.com/sidorares/node-mysql2/pull/4178) ✅ merged
+- **`node-redis`**: [redis/node-redis#3195](https://github.com/redis/node-redis/pull/3195) ✅ merged
+- **`ioredis`**: [redis/ioredis#2089](https://github.com/redis/ioredis/pull/2089) ✅ merged
+- **`mongoose`**: [Automattic/mongoose#16275](https://github.com/Automattic/mongoose/pull/16275) ✅ merged & released (v9.7.0)
+- **`pg` / `pg-pool`**: [brianc/node-postgres#3650](https://github.com/brianc/node-postgres/pull/3650), PR open
+- **`knex`**: [knex/knex#6410](https://github.com/knex/knex/pull/6410), PR open
+- **`mongodb`**: [NODE-7472](https://jira.mongodb.org/browse/NODE-7472), issue opened
+- **`tedious`**: [tediousjs/tedious#1727](https://github.com/tediousjs/tedious/issues/1727), issue opened
+- **`@prisma/client`**: [prisma/prisma#29353](https://github.com/prisma/prisma/issues/29353), issue opened
 
 **Other:**
-- **`graphql`**: PR open, **`unstorage`**: ✅ merged, **`db0`**: PR open
+- **`graphql`**: [graphql/graphql-js#4670](https://github.com/graphql/graphql-js/pull/4670) ✅ merged & released (v17.0.0-rc.0)
+- **`ai`** (Vercel AI SDK): [vercel/ai#15660](https://github.com/vercel/ai/pull/15660) ✅ merged & released (v7.0.0), ships the `ai:telemetry` TracingChannel
+- **`unstorage`**: [unjs/unstorage#707](https://github.com/unjs/unstorage/pull/707) ✅ merged
+- **`db0`**: [unjs/db0#193](https://github.com/unjs/db0/pull/193) ✅ merged & released (v0.4.0)
+- **`pino`**: [pinojs/pino#2281](https://github.com/pinojs/pino/pull/2281) ✅ merged & released (v9.10.0)
 
 ---
 

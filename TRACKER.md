@@ -145,7 +145,7 @@ Core logic is ours — only OTel base classes need swapping.
 | Nitro | ~7M | — | [nitrojs/nitro#4001](https://github.com/nitrojs/nitro/pull/4001) (pi0) | ✅ **Merged** (2026-04-13) |
 | Nuxt | ~6M | — | [nuxt/nuxt#35191](https://github.com/nuxt/nuxt/pull/35191) (danielroe) | ✅ **Merged & released** (v4.5.0, 2026-07-18), opt-in via the `tracingChannel` config |
 | Elysia | ~2M | — | [elysiajs/elysia#1809](https://github.com/elysiajs/elysia/issues/1809) | 💬 In discussion |
-| Remix | — | — | — | 📝 Proposal drafted |
+| Remix | ~62K (`remix`; v2 traffic is on `@remix-run/*`, ~3.4M) | — | — | 📝 Proposal drafted. Remix 3 is a ground-up rewrite (on `3.0.0-rc.2`) with no APM instrumentation yet |
 
 ## Logging Libraries
 
